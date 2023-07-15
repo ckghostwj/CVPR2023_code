@@ -11,63 +11,17 @@
 
 import numpy as np
 import math
-from scipy.special import comb
 from scipy import sparse
 from scipy.sparse import csr_matrix
-from scipy.sparse.linalg import eigs
 from sklearn.cluster import KMeans
 from scipy.sparse import spdiags
 from scipy.sparse import issparse
-from sklearn.metrics import accuracy_score, normalized_mutual_info_score
-from sklearn.metrics import mutual_info_score
 from scipy.sparse import coo_matrix
 from scipy.sparse import csc_matrix
 import scipy.io as scio
 from mindspore import Tensor
 from mindspore import dtype as mstype
 import mindspore.numpy as np2
-
-
-
-# In[2]:
-
-    
-def SpectralClustering(W, n, varargin):
-    if not np.array_equal(W, W.T):
-        raise ValueError('In {}: Affinity matrix is not symmetric'.format(file))
-    vararg = {'Start': 'sample',
-            'MaxIter': 1000,
-            'Replicates': 20,
-            'Eig_Solver': 'eig'}
-    vararg = vararginParser(vararg, varargin)
-    pair = np.array(vararg).reshape(-1, 2)
-    for p in pair:
-        key, value = p[0], p[1]
-        exec(key+'='+repr(value))
-        if Eig_Solver.lower() == 'eig':
-            temp = cnormalize(W, axis=1).T, cnormalize(W, axis=1)
-            temp = Tensor(temp,mstype.float64)
-            M = np2.matmul(temp) # 计算完整矩阵 M
-            M = M.asnumpy()
-            D, V = np.linalg.eig(M) # 计算特征值和特征向量
-            ord = np.argsort(-np.real(D)) # 按特征值降序排列索引
-            kerN = V[:, ord[:n]] # 提取前 n 个特征向量作为内核矩阵
-            kerN = cnormalize(kerN, axis=0) # 归一化得到所需内核矩阵
-        elif Eig_Solver.lower() == 'eigs':
-            temp = cnormalize(W, axis=1).T, cnormalize(W, axis=1)
-            temp = Tensor(temp,mstype.float64)
-            M = np2.matmul(temp) 
-            M = M.asnumpy() # 计算完整矩阵 M
-            _, kerN = eigs(M, n, which='LM') # 计算前 n 个右奇异向量
-            kerN = cnormalize(kerN.T, axis=0) # 归一化得到所需内核矩阵
-    kerN=cnormalize_inplace(kerN.T).T
-    # 将 kerN 转换为实数类型
-    kerN_real = np.real(kerN)
-    # 构造 KMeans 实例
-    kmeans = KMeans(n_clusters=n, init=Start, max_iter=MaxIter, n_init=Replicates, algorithm='auto')
-    # 训练模型并预测聚类结果
-    groups = kmeans.fit_predict(kerN_real)
-    return groups
 
 
 # In[3]:
@@ -189,32 +143,6 @@ def solveF(Z,numOfClasses):
 
 
 # In[6]:
-
-
-def nchoosek(n, k):
-    return comb(n, k, exact=True)
-def RandIndex(c1,c2):
-    if len(sys.argv) < 3 or len(c1.shape) != 1 or len(c2.shape) != 1:
-        raise ValueError("RandIndex: Requires two vector arguments")
-        return
-    C=pd.crosstab(c1,c2)
-    n=np.sum(np.sum(C))
-    nis = np.sum(np.sum(C, axis=1) ** 2)
-    njs = np.sum(np.sum(C, axis=0) ** 2)
-    t1=nchoosek(n,2)
-    t2=np.sum(np.sum(C)**2)
-    t3=0.5*(nis+njs)
-    nc=(n*(n^2+1)-(n+1)*nis-(n+1)*njs+2*(nis*njs)/n)/(2*(n-1))
-    A=t1+t2-t3
-    D=  -t2+t3
-    if t1==nc:
-        AR=0
-    else:
-        AR=(A-nc)/(t1-nc)
-    RI=A/t1
-    MI=D/t1
-    HI=(A-D)/t1
-    return AR,RI,MI,HI
 
 
 # In[7]:
@@ -359,17 +287,6 @@ def eig1(A,c=None,isMax=1,isSym=1):
     return eigvec,eigval,eigval_full
 
 
-# In[11]:
-
-
-def Contingency(Mem1,Mem2):
-    if len(args) < 2 or np.min(np.shape(Mem1)) > 1 or np.min(np.shape(Mem2)) > 1:
-        raise ValueError('Contingency: Requires two vector arguments')
-    Cont = np.zeros((int(np.max(Mem1)), int(np.max(Mem2))))
-    for i in range(len(Mem1)):
-        Cont[int(Mem1[i]), int(Mem2[i])] += 1
-    return Cont
-
 
 # In[12]:
 
@@ -393,22 +310,6 @@ def constructW(fea, options=None):
     if options['NeighborMode'].lower() == 'knn':
         if 'k' not in options:
             options['k'] = 5
-
-    elif options['NeighborMode'].lower() == 'supervised':
-        if 'bLDA' not in options:
-            options['bLDA'] = 0
-
-        if options['bLDA']:
-            options['bSelfConnected'] = 1
-
-        if 'k' not in options:
-            options['k'] = 0
-
-        if 'gnd' not in options:
-            raise ValueError("Label(gnd) should be provided under 'Supervised' NeighborMode!")
-
-        if fea and len(options['gnd']) != fea.shape[0]:
-            raise ValueError("gnd doesn't match with fea!")
 
     else:
        raise ValueError("NeighborMode does not exist!")
@@ -448,114 +349,6 @@ def constructW(fea, options=None):
     BlockSize = maxM // (nSmp * 3)
     #print(BlockSize)
     
-    if options['NeighborMode'].lower() == 'supervised':
-        Label = np.unique(options['gnd'])
-        nLabel = len(Label)
-        if options['bLDA']:
-            G = np.zeros((nSmp,nSmp))
-            for idx in range(nLabel):
-                classIdx = (options['gnd']==Label[idx])
-                G[classIdx, classIdx] = 1.0/np.sum(classIdx)
-            W = sparse.csr_matrix(G)
-            return W
-
-        options['WeightMode'] = options['WeightMode'].lower()
-        if options['WeightMode'] == 'binary':
-            if options['k'] > 0:
-                G = np.zeros((nSmp*(options['k']+1),3))
-                idNow = 0
-                for i in range(nLabel):
-                    classIdx = np.where(options['gnd']==Label[i])[0]
-                    D = EuDist2(fea[classIdx,:], squared=True)
-                    idx = np.argsort(D, axis=1)
-                    idx = idx[:, :options['k']+1]
-
-                    nSmpClass = len(classIdx)*(options['k']+1)
-                    G[idNow+np.arange(nSmpClass).reshape(-1,1), 0] = np.tile(classIdx, (options['k']+1, 1)).reshape(-1, 1)
-                    G[idNow+np.arange(nSmpClass).reshape(-1,1), 1] = np.reshape(classIdx[idx], (-1, 1))
-                    G[idNow+np.arange(nSmpClass).reshape(-1,1), 2] = 1
-                    idNow += nSmpClass
-
-                G = sparse.csr_matrix((G[:,2], (G[:,0], G[:,1])), shape=(nSmp,nSmp))
-                G = G.maximum(G.transpose())
-            else:
-                G = np.zeros((nSmp,nSmp))
-                for i in range(nLabel):
-                    classIdx = np.where(options['gnd']==Label[i])[0]
-                    G[classIdx, classIdx] = 1.0
-
-            if not options['bSelfConnected']:
-                np.fill_diagonal(G, 0)
-
-            W = sparse.csr_matrix(G)
-
-        elif options['WeightMode'] == 'heatkernel':
-            if options['k'] > 0:
-                G = np.zeros((nSmp*(options['k']+1),3))
-                idNow = 0
-                for i in range(nLabel):
-                    classIdx = np.where(options['gnd']==Label[i])[0]
-                    D = EuDist2(fea[classIdx,:], squared=True)
-                    idx = np.argsort(D, axis=1)
-                    idx = idx[:, :options['k']+1]
-                    D = D[np.arange(len(classIdx)).repeat(options['k']+1), idx.ravel()].reshape(-1, options['k']+1)
-                    D = np.exp(-D/(2*options['t']**2))
-
-                    nSmpClass = len(classIdx)*(options['k']+1)
-                    G[idNow+np.arange(nSmpClass).reshape(-1,1), 0] = np.tile(classIdx, (options['k']+1, 1)).reshape(-1, 1)
-                    G[idNow+np.arange(nSmpClass).reshape(-1,1), 1] = np.reshape(classIdx[idx], (-1, 1))
-                    G[idNow+np.arange(nSmpClass).reshape(-1,1), 2] = D.ravel()
-                    idNow += nSmpClass
-
-                G = sparse.csr_matrix((G[:,2], (G[:,0], G[:,1])), shape=(nSmp,nSmp))
-            else:
-                G = np.zeros((nSmp,nSmp))
-                for i in range(nLabel):
-                    classIdx = np.where(options['gnd']==Label[i])[0]
-                    D = EuDist2(fea[classIdx,:], squared=True)
-                    D = np.exp(-D/(2*options['t']**2))
-                    G[classIdx, classIdx] = D
-
-            if not options['bSelfConnected']:
-                np.fill_diagonal(G, 0)
-
-            W = sparse.csr_matrix(G.maximum(G.transpose()))
-
-        elif options['WeightMode'] == 'cosine':
-            if not options['bNormalized']:
-                fea = NormalizeFea(fea)
-
-            if options['k'] > 0:
-                G = np.zeros((nSmp*(options['k']+1),3))
-                idNow = 0
-                for i in range(nLabel):
-                    classIdx = np.where(options['gnd']==Label[i])[0]
-                    D = fea[classIdx, :] @ fea[classIdx, :].T
-                    idx = np.argsort(-D, axis=1)
-                    idx = idx[:, :options['k']+1]
-                    D = -D[np.arange(len(classIdx)).repeat(options['k']+1), idx.ravel()].reshape(-1, options['k']+1)
-
-                    nSmpClass = len(classIdx)*(options['k']+1)
-                    G[idNow+np.arange(nSmpClass).reshape(-1,1), 0] = np.tile(classIdx, (options['k']+1, 1)).reshape(-1, 1)
-                    G[idNow+np.arange(nSmpClass).reshape(-1,1), 1] = np.reshape(classIdx[idx], (-1, 1))
-                    G[idNow+np.arange(nSmpClass).reshape(-1,1), 2] = D.ravel()
-                    idNow += nSmpClass
-
-                G = sparse.csr_matrix((G[:,2], (G[:,0], G[:,1])), shape=(nSmp,nSmp))
-            else:
-                G = np.zeros((nSmp,nSmp))
-                for i in range(nLabel):
-                    classIdx = np.where(options['gnd']==Label[i])[0]
-                    D = fea[classIdx, :] @ fea[classIdx, :].T
-                    G[classIdx, classIdx] = D
-
-            if not options['bSelfConnected']:
-                np.fill_diagonal(G, 0)
-
-            W = sparse.csr_matrix(G.maximum(G.transpose()))
-        else:
-            raise ValueError('WeightMode does not exist!')
-
     if bCosine and not options['bNormalized']:
         Normfea = NormalizeFea(fea)
 
@@ -586,7 +379,7 @@ def constructW(fea, options=None):
                         dump = dist[np.arange(len(smpIdx))[:,None], idx]
                     if not bBinary:
                         if bCosine:
-                            dist = np.dot(normfea[smpIdx,:], normfea.T)
+                            dist = np.dot(Normfea[smpIdx,:], Normfea.T)
                             linidx = np.arange(len(idx))[:,None]
                             dump = dist[linidx, idx]
                         else:
@@ -617,7 +410,7 @@ def constructW(fea, options=None):
 
                     if not bBinary:
                         if bCosine:
-                            dist = np.dot(normfea[smpIdx,:], normfea.T)
+                            dist = np.dot(Normfea[smpIdx,:], Normfea.T)
                             linidx = np.arange(len(idx))[:,None]
                             dump = dist[linidx, idx]
                         else:
@@ -715,8 +508,6 @@ def constructW(fea, options=None):
             a2=W.T.todense()
             a2=np.array(a2)
             a3 = np.maximum(a1,a2)
-            #print("a3=")
-            #print(a3)
             W=coo_matrix(a3)
 
         return W
@@ -724,10 +515,10 @@ def constructW(fea, options=None):
     if weight_mode == 'binary':
         raise ValueError('Binary weight can not be used for complete graph!')
     elif weight_mode == 'heatkernel':
-        W = pairwise_distances(fea)
+        W = EuDist2(fea)
         W = np.exp(-W / (2 * options['t'] ** 2))
     elif weight_mode == 'cosine':
-        Normfea = normalize(fea)
+        
         W = Normfea.dot(Normfea.T)
     else:
         raise ValueError('WeightMode does not exist!')
@@ -739,8 +530,6 @@ def constructW(fea, options=None):
     a2=W.T.todense()
     a2=np.array(a2)
     a3 = np.maximum(a1,a2)
-    print("a3=")
-    print(a3)
     W=coo_matrix(a3)
     return W
 
@@ -885,12 +674,6 @@ def cnormalize(X, p=2):
 
 
 # In[17]:
-
-
-from sklearn.metrics import accuracy_score, normalized_mutual_info_score
-from sklearn.metrics import mutual_info_score
-from scipy.sparse import coo_matrix
-from scipy.sparse import csc_matrix
 
 def hmreduce(A,CH,RH,LC,LR,SLC,SLR):
     A=np.delete(A,0,axis=0)
@@ -1269,8 +1052,6 @@ def ClusteringMeasure(Y, predY):
             predY0[predY == uY[i]] = (i+1)
         predY = predY0.astype(int)
     
-    Lidx = np.unique(Y)
-    classnum = len(Lidx)
     predLidx = np.unique(predY)
     pred_classnum = len(predLidx)
     # 计算purity
@@ -1303,7 +1084,6 @@ def ClusteringMeasure(Y, predY):
 
 
 Dataname = 'bbcsport4vbigRnSp'
-
 percentDel = 0.5
 para_r = 2
 para_k = 5
